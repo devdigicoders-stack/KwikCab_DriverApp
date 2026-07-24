@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:kwikcabdriver/core/network/app_http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/network/api_constants.dart';
 

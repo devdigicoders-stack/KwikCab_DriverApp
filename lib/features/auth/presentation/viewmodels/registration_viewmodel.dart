@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:kwikcabdriver/core/network/app_http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/network/api_constants.dart';
 import '../../../../core/utils/auth_response.dart';
@@ -241,8 +241,25 @@ class RegistrationViewModel extends ChangeNotifier {
     return true;
   }
 
-  void nextStep() {
+  Future<void> nextStep() async {
     if (validateStep()) {
+      if (_currentStep == 0) {
+        // Automatically create a Driver Lead when personal details are filled
+        try {
+          await http.post(
+            Uri.parse(ApiConstants.createDriverLead),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'name': name,
+              'mobile': phone,
+              'email': email,
+            }),
+          );
+        } catch (e) {
+          print('Failed to create driver lead: $e');
+        }
+      }
+
       if (_currentStep < 3) {
         _currentStep++;
         _error = null;

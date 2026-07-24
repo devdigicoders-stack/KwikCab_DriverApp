@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:kwikcabdriver/core/network/app_http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/network/api_constants.dart';
 
@@ -9,12 +9,14 @@ class NotificationItem {
   final String title;
   final String message;
   final String createdAt;
+  final String createdByModel;
 
   NotificationItem({
     required this.id,
     required this.title,
     required this.message,
     required this.createdAt,
+    required this.createdByModel,
   });
 
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
@@ -23,6 +25,7 @@ class NotificationItem {
       title: json['title'] ?? 'Notification',
       message: json['message'] ?? '',
       createdAt: json['createdAt'] ?? '',
+      createdByModel: json['createdByModel'] ?? '',
     );
   }
 }

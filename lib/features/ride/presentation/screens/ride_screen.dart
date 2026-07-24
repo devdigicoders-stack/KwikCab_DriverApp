@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -125,6 +126,105 @@ class _RideBody extends StatelessWidget {
           // Ride request overlay
           if (vm.currentRequest != null)
             _RideRequestOverlay(request: vm.currentRequest!, timer: vm.requestTimer, vm: vm),
+
+          // Waiting for Payment Overlay
+          if (vm.isWaitingForPayment)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.8),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: AppColors.yellow),
+                    SizedBox(height: 24),
+                    Text('Waiting for Customer', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    Text('to select payment method...', style: TextStyle(color: Colors.grey, fontSize: 16)),
+                  ],
+                ),
+              ),
+            ),
+            
+          // Collect Cash Overlay
+          if (vm.isWaitingForCash)
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  child: Center(
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: AppColors.success.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.payments_rounded, size: 40, color: AppColors.success),
+                          ),
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Collect Cash',
+                            style: TextStyle(
+                              color: Colors.black87,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Please collect the cash from the customer before completing the trip.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.black54,
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                bool success = await vm.confirmCashCollection();
+                                if (!success && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to confirm cash!')));
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.success,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              child: const Text('CONFIRM PAYMENT', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -444,7 +544,7 @@ class _ActiveRidePanelState extends State<_ActiveRidePanel> {
     final ride = vm.activeRide!;
     final isAccepted = ride.bookingStatus == 'Accepted';
     final isArrived = ride.bookingStatus == 'Arrived';
-    final isStarted = ride.bookingStatus == 'Ongoing';
+    final isStarted = ride.bookingStatus == 'Ongoing' || ride.bookingStatus == 'Payment_Pending';
 
     // Check stops
     int nextStopIndex = -1;
@@ -662,7 +762,10 @@ class _ActiveRidePanelState extends State<_ActiveRidePanel> {
                           await vm.markStopArrived(nextStopIndex);
                         }
                       } else {
-                        _showPaymentDialog(context, vm);
+                        bool success = await vm.initiateTripCompletion();
+                        if (!success && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to initiate payment!')));
+                        }
                       }
                     }
                     if (mounted) setState(() => _isLoading = false);
@@ -700,75 +803,6 @@ class _ActiveRidePanelState extends State<_ActiveRidePanel> {
     );
   }
 
-  void _showPaymentDialog(BuildContext context, RideViewModel vm) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.grey900,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (dialogContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Select Payment Method', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.white)),
-                const SizedBox(height: 20),
-                ListTile(
-                  leading: const Icon(Icons.money, color: AppColors.success),
-                  title: const Text('Cash', style: TextStyle(color: AppColors.white, fontSize: 16)),
-                  onTap: () async {
-                    Navigator.pop(dialogContext);
-                    setState(() => _isLoading = true);
-                    bool success = await vm.completeRide('Cash');
-                    if (mounted) setState(() => _isLoading = false);
-                    if (!success && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to complete ride! Check stops/network.')));
-                    }
-                  },
-                ),
-                const Divider(color: AppColors.grey800),
-                ListTile(
-                  leading: const Icon(Icons.qr_code, color: AppColors.yellow),
-                  title: const Text('Online', style: TextStyle(color: AppColors.white, fontSize: 16)),
-                  onTap: () async {
-                    Navigator.pop(dialogContext);
-                    setState(() => _isLoading = true);
-                    final url = await vm.initiateOnlinePayment();
-                    
-                    if (url != null && mounted) {
-                      final success = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PaymentWebviewScreen(
-                            paymentUrl: url,
-                            bookingId: vm.activeRide!.bookingId,
-                          ),
-                        ),
-                      );
-                      
-                      if (success == true) {
-                        vm.handlePaymentSuccessLocally();
-                      } else {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment failed or cancelled!')));
-                        }
-                      }
-                    } else {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to initiate payment! Check network.')));
-                      }
-                    }
-                    if (mounted) setState(() => _isLoading = false);
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   void _showCancelDialog(BuildContext context, RideViewModel vm) {
     final TextEditingController reasonController = TextEditingController();

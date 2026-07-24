@@ -1,5 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:kwikcabdriver/core/network/app_http.dart' as http;
+import '../../../../core/network/api_constants.dart';
 import '../viewmodels/home_viewmodel.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../ride/presentation/screens/ride_screen.dart';
@@ -8,9 +12,16 @@ import '../../../earnings/presentation/screens/earnings_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../bulk_bookings/presentation/screens/bulk_bookings_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+bool _hasShownAdminPopupThisSession = false;
+
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
   static const List<Widget> _pages = [
     RideScreen(),
     BookingsScreen(),
@@ -18,6 +29,88 @@ class HomeScreen extends StatelessWidget {
     EarningsScreen(),
     ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAdminNotification();
+    });
+  }
+
+  Future<void> _checkAdminNotification() async {
+    if (_hasShownAdminPopupThisSession) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('driver_token') ?? '';
+
+      final response = await http.get(
+        Uri.parse(ApiConstants.getMyNotifications),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200 && mounted) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['notifications'] != null) {
+          final List<dynamic> list = data['notifications'];
+          for (var n in list) {
+            final creator = (n['createdByModel'] ?? '').toString().toLowerCase();
+            if (creator == 'admin' || creator == 'subadmin') {
+              _hasShownAdminPopupThisSession = true;
+              _showAdminNotificationPopup(n);
+              break; // Show only the first (latest) admin message
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _showAdminNotificationPopup(Map<String, dynamic> n) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: AppColors.white,
+        elevation: 10,
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.notifications_active, color: AppColors.yellow, size: 64),
+              const SizedBox(height: 16),
+              Text(
+                n['title'] ?? 'Zaroori Suchna',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.black),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                n['message'] ?? '',
+                style: const TextStyle(fontSize: 15, color: Colors.black87, height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red,
+                  ),
+                  child: const Text('Ok', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

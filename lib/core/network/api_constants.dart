@@ -6,6 +6,7 @@ class ApiConstants {
   static const String driverLogin = '$baseUrl/api/drivers/login';
   static const String driverRegister = '$baseUrl/api/drivers/register';
   static const String driverResubmit = '$baseUrl/api/drivers/resubmit';
+  static const String createDriverLead = '$baseUrl/api/driver-leads';
   static const String driverProfile = '$baseUrl/api/drivers/profile';
   static const String profileUpdate = '$baseUrl/api/drivers/profile-update';
   static const String carCategories = '$baseUrl/api/car-categories/active';
@@ -19,6 +20,8 @@ class ApiConstants {
   static const String executeStopComplete = '$baseUrl/api/trips/execute/:bookingId/stops/:stopIndex/complete';
   static const String executeCancel = '$baseUrl/api/trips/execute/:bookingId/cancel';
   static const String executeEnd = '$baseUrl/api/trips/execute/:bookingId/end';
+  static const String initiateCompletion = '$baseUrl/api/trips/execute/:bookingId/initiate-completion';
+  static const String confirmCash = '$baseUrl/api/trips/execute/:bookingId/confirm-cash';
   static const String initiatePayment = '$baseUrl/api/trips/execute/:bookingId/initiate-payment';
   static const String getDriverTrips = '$baseUrl/api/trips/driver/my-trips';
   static const String getSingleBooking = '$baseUrl/api/bookings/:bookingId';
@@ -47,4 +50,10 @@ class ApiConstants {
   static const String agentLeadMyAccepted = '$baseUrl/api/agent-leads/driver/my-accepted-leads';
   static String agentLeadInitiatePayment(String id) => '$baseUrl/api/agent-leads/$id/initiate-payment';
   static String agentLeadComplete(String id) => '$baseUrl/api/agent-leads/$id/complete';
+
+  // Fixed Packages (Fixed Routes)
+  static const String fixedPackageMarketplace = '$baseUrl/api/fixed-routes/bookings/marketplace/driver';
+  static const String fixedPackageMyAccepted = '$baseUrl/api/fixed-routes/bookings/my-accepted/driver';
+  static String fixedPackageAccept(String id) => '$baseUrl/api/fixed-routes/bookings/$id/accept-driver';
+  static String fixedPackageComplete(String id) => '$baseUrl/api/fixed-routes/bookings/$id/complete-driver';
 }

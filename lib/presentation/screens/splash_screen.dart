@@ -45,9 +45,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset('assets/logo_icon.png', width: 180, height: 180, fit: BoxFit.contain),
+              Image.asset('assets/logo2.png', width: 280, height: 280, fit: BoxFit.contain),
               const SizedBox(height: 16),
-              const Text('DRIVER', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.yellow, letterSpacing: 6)),
+              const Text('DRIVER', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.yellow, letterSpacing: 6)),
             ],
           ),
         ),

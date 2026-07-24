@@ -3,7 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:kwikcabdriver/core/network/app_http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/app_theme.dart';
 import 'routes/app_routes.dart';
@@ -79,57 +79,67 @@ void main() async {
     sound: true,
   );
 
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    debugPrint('✅ [FCM FOREGROUND] Message received: ${message.notification?.title}');
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+    debugPrint('✅ [FCM FOREGROUND] Message received');
     
+    // Backend sends data-only messages — read from data map
+    final rawTitle = message.data['title'] ?? message.notification?.title ?? 'Notification';
+    final rawBody = message.data['body'] ?? message.notification?.body ?? 'You have a new message';
+    final imageUrl = message.data['mediaUrl'] ?? message.data['image'] ?? '';
+
     final emojiRegex = RegExp(r'(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])');
-    final rawTitle = message.notification?.title ?? message.data['title'] ?? 'Notification';
     final title = rawTitle.replaceAll(emojiRegex, '').trim();
-    final rawBody = message.notification?.body ?? message.data['body'] ?? message.data['message'] ?? 'You have a new message';
     final body = rawBody.replaceAll(emojiRegex, '').trim();
     
-    final context = scaffoldMessengerKey.currentContext;
-    if (context == null || !context.mounted) return;
-    final size = MediaQuery.of(context).size;
-    
-    scaffoldMessengerKey.currentState?.showSnackBar(
-      SnackBar(
-        content: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                'assets/logo_icon.png',
-                width: 40,
-                height: 40,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.notifications, color: Colors.black, size: 40),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
-                  const SizedBox(height: 4),
-                  Text(body, style: const TextStyle(color: Colors.black, fontSize: 14)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: AppColors.yellow,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.only(
-          bottom: size.height - 190 > 0 ? size.height - 190 : 600,
-          left: 16,
-          right: 16,
-        ),
-        duration: const Duration(seconds: 5),
-      ),
+    AndroidNotificationDetails androidDetails;
+
+    if (imageUrl.isNotEmpty) {
+      try {
+        // Download image for BigPicture style
+        final response = await http.get(Uri.parse(imageUrl));
+        final bytes = response.bodyBytes;
+        final bigPictureStyle = BigPictureStyleInformation(
+          ByteArrayAndroidBitmap(bytes),
+          contentTitle: title,
+          summaryText: body,
+        );
+        androidDetails = AndroidNotificationDetails(
+          'kwikcab_driver_channel_high',
+          'KwikCab Notifications',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          styleInformation: bigPictureStyle,
+        );
+      } catch (_) {
+        // If image download fails, fall back to normal
+        androidDetails = const AndroidNotificationDetails(
+          'kwikcab_driver_channel_high',
+          'KwikCab Notifications',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+        );
+      }
+    } else {
+      androidDetails = const AndroidNotificationDetails(
+        'kwikcab_driver_channel_high',
+        'KwikCab Notifications',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+      );
+    }
+
+    final platformChannelSpecifics = NotificationDetails(android: androidDetails);
+    flutterLocalNotificationsPlugin.show(
+      message.hashCode,
+      title,
+      body,
+      platformChannelSpecifics,
     );
   });
 

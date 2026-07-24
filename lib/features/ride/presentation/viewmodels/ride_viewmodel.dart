@@ -3,14 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:http/http.dart' as http;
+import 'package:kwikcabdriver/core/network/app_http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:kwikcabdriver/core/network/app_http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -178,6 +178,8 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
   StreamSubscription<Map<String, dynamic>>? _socketSubscription;
   StreamSubscription<Map<String, dynamic>>? _bookingUpdateSubscription;
   StreamSubscription<Map<String, dynamic>>? _timeoutSubscription;
+  StreamSubscription<Map<String, dynamic>>? _newAgentLeadSubscription;
+  StreamSubscription<Map<String, dynamic>>? _collectCashSubscription;
   String? _driverId;
   BitmapDescriptor? _carIcon;
 
@@ -194,10 +196,15 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
   int _todayRides = 0;
   double _todayEarnings = 0.0;
 
+  bool _isWaitingForPayment = false;
+  bool _isWaitingForCash = false;
+
   DateTime? get arrivedAt => _arrivedAt;
   int get waitingSeconds => _waitingSeconds;
   int get todayRides => _todayRides;
   double get todayEarnings => _todayEarnings;
+  bool get isWaitingForPayment => _isWaitingForPayment;
+  bool get isWaitingForCash => _isWaitingForCash;
   PolylinePoints _polylinePoints = PolylinePoints(apiKey: _googleMapsApiKey);
 
   DriverStatus get status => _status;
@@ -413,7 +420,10 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
             _selectedRideIndex = 0;
             // Determine overall status based on the first ride (simplified)
             final statusStr = _activeRides.first.bookingStatus;
-            if (statusStr == 'Arrived') {
+            if (statusStr == 'Payment_Pending') {
+              _status = DriverStatus.rideStarted;
+              _isWaitingForPayment = true;
+            } else if (statusStr == 'Arrived') {
               _status = DriverStatus.driverArrived;
             } else if (statusStr == 'Ongoing') {
               _status = DriverStatus.rideStarted;
@@ -639,7 +649,21 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
     
     // Always listen to booking updates (like cancellations) if we are not offline
     _bookingUpdateSubscription = SocketService.instance.onBookingUpdate.listen((data) {
-      if (data['status'] == 'Cancelled') {
+      if (data['status'] == 'Completed') {
+         _isWaitingForPayment = false;
+         _isWaitingForCash = false;
+         // Same as Cash flow: show ride completed screen with rating option
+         _lastCompletedRide = activeRide;
+         _activeRides.removeWhere((r) => r.bookingId == (data['bookingId'] ?? activeRide?.bookingId));
+         if (_activeRides.isEmpty) {
+           _status = DriverStatus.rideCompleted;
+         } else {
+           _polylines.clear();
+           _currentRoutePoints.clear();
+         }
+         _selectedRideIndex = 0;
+         notifyListeners();
+      } else if (data['status'] == 'Cancelled') {
         _currentRequest = null;
         
         final context = navigatorKey.currentContext;
@@ -703,31 +727,53 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
     bool canPoll = _status == DriverStatus.online || 
         (_activeRides.isNotEmpty && _activeRides.every((r) => r.rideType.trim().toLowerCase() == 'shared'));
         
-    if (!canPoll) return;
-    
-    _socketSubscription = SocketService.instance.onNewRideRequest.listen((data) {
-      _fetchPendingRequests();
-    });
-
-    _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      bool stillCanPoll = _status == DriverStatus.online || 
-          (_activeRides.isNotEmpty && _activeRides.every((r) => r.rideType.trim().toLowerCase() == 'shared'));
-      if (stillCanPoll) {
+    if (canPoll) {
+      _socketSubscription = SocketService.instance.onNewRideRequest.listen((data) {
         _fetchPendingRequests();
-      } else {
-        _pollingTimer?.cancel();
+      });
+
+      _pollingTimer?.cancel();
+      _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+        bool stillCanPoll = _status == DriverStatus.online || 
+            (_activeRides.isNotEmpty && _activeRides.every((r) => r.rideType.trim().toLowerCase() == 'shared'));
+        if (stillCanPoll) {
+          _fetchPendingRequests();
+        } else {
+          _pollingTimer?.cancel();
+        }
+      });
+
+      _timeoutSubscription = SocketService.instance.onRideRequestTimeout.listen((data) {
+        // If the request timed out for this driver, dismiss it
+        if (_currentRequest != null && (_currentRequest!.id == data['requestId'] || _currentRequest!.bookingId == data['bookingId'])) {
+          _currentRequest = null;
+          _stopRingtone();
+          if (_activeRides.isEmpty) {
+            _status = DriverStatus.online;
+          }
+          notifyListeners();
+        }
+      });
+    }
+
+    _newAgentLeadSubscription = SocketService.instance.onNewAgentLead.listen((data) {
+      final context = navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(
+             content: Text('🚀 New Agent Lead! Earn ₹${data['earning']}. Check Marketplace!'),
+             backgroundColor: Colors.green,
+             duration: const Duration(seconds: 8),
+           ),
+         );
       }
     });
-
-    _timeoutSubscription = SocketService.instance.onRideRequestTimeout.listen((data) {
-      // If the request timed out for this driver, dismiss it
-      if (_currentRequest != null && (_currentRequest!.id == data['requestId'] || _currentRequest!.bookingId == data['bookingId'])) {
-        _currentRequest = null;
-        _stopRingtone();
-        if (_activeRides.isEmpty) {
-          _status = DriverStatus.online;
-        }
+    
+    _collectCashSubscription = SocketService.instance.onCollectCash.listen((data) {
+      print('DEBUG: onCollectCash triggered. data: $data');
+      if (activeRide != null) {
+        _isWaitingForPayment = false;
+        _isWaitingForCash = true;
         notifyListeners();
       }
     });
@@ -742,6 +788,10 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
     _bookingUpdateSubscription = null;
     _timeoutSubscription?.cancel();
     _timeoutSubscription = null;
+    _newAgentLeadSubscription?.cancel();
+    _newAgentLeadSubscription = null;
+    _collectCashSubscription?.cancel();
+    _collectCashSubscription = null;
     _pollingTimer?.cancel();
     _pollingTimer = null;
 
@@ -1285,25 +1335,56 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<bool> completeRide(String paymentMethod) async {
+  Future<bool> initiateTripCompletion() async {
     if (activeRide == null) return false;
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('driver_token') ?? '';
 
-      final url = ApiConstants.executeEnd.replaceAll(':bookingId', activeRide!.bookingId);
-      print('Calling API: PUT $url');
-      final response = await http.put(
+      final url = ApiConstants.initiateCompletion.replaceAll(':bookingId', activeRide!.bookingId);
+      print('Calling API: POST $url');
+      final response = await http.post(
         Uri.parse(url),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({"paymentMethod": paymentMethod}),
       );
 
-      print('completeRide response: ${response.statusCode} - ${response.body}');
+      print('initiateTripCompletion response: ${response.statusCode} - ${response.body}');
       if (response.statusCode == 200) {
+        _isWaitingForPayment = true;
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('initiateTripCompletion error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> confirmCashCollection() async {
+    if (activeRide == null) return false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('driver_token') ?? '';
+
+      final url = ApiConstants.confirmCash.replaceAll(':bookingId', activeRide!.bookingId);
+      print('Calling API: POST $url');
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      print('confirmCashCollection response: ${response.statusCode} - ${response.body}');
+      if (response.statusCode == 200) {
+        _isWaitingForCash = false;
+        _isWaitingForPayment = false;
+        
         _lastCompletedRide = activeRide;
         _activeRides.removeWhere((r) => r.bookingId == activeRide!.bookingId);
         if (_activeRides.isEmpty) {
@@ -1318,36 +1399,15 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
       }
       return false;
     } catch (e) {
-      print('completeRide error: $e');
+      print('confirmCashCollection error: $e');
       return false;
     }
   }
 
-  Future<String?> initiateOnlinePayment() async {
-    if (activeRide == null) return null;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('driver_token') ?? '';
-
-      final url = ApiConstants.initiatePayment.replaceAll(':bookingId', activeRide!.bookingId);
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body['success'] == true && body['paymentLinks'] != null) {
-          return body['paymentLinks']['mobile'] ?? body['paymentLinks']['web'];
-        }
-      }
-      return null;
-    } catch (e) {
-      print('Payment Initiation Error: $e');
-      return null;
-    }
+  void resetPaymentState() {
+    _isWaitingForPayment = false;
+    _isWaitingForCash = false;
+    notifyListeners();
   }
 
   void handlePaymentSuccessLocally() {

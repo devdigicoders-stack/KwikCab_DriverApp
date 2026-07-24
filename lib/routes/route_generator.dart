@@ -10,6 +10,9 @@ import '../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../features/profile/presentation/screens/agent_lead_marketplace_screen.dart';
 import '../features/profile/presentation/screens/my_accepted_leads_screen.dart';
 import '../features/profile/presentation/screens/hdfc_payment_webview.dart';
+import '../features/fixed_packages/presentation/screens/fixed_package_marketplace_screen.dart';
+import '../features/fixed_packages/presentation/screens/my_accepted_fixed_packages_screen.dart';
+import '../features/fixed_packages/presentation/screens/fixed_package_details_screen.dart';
 
 class RouteGenerator {
   RouteGenerator._();
@@ -42,6 +45,12 @@ class RouteGenerator {
         return _route(const MyAcceptedLeadsScreen());
       case AppRoutes.hdfcPaymentWebview:
         return _route(HdfcPaymentWebviewScreen(paymentUrl: settings.arguments as String));
+      case AppRoutes.fixedPackageMarketplace:
+        return _route(const FixedPackageMarketplaceScreen());
+      case AppRoutes.myAcceptedFixedPackages:
+        return _route(const MyAcceptedFixedPackagesScreen());
+      case AppRoutes.fixedPackageDetails:
+        return _route(FixedPackageDetailsScreen(package: settings.arguments as Map<String, dynamic>));
       default:
         return _route(const SplashScreen());
     }

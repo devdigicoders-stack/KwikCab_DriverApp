@@ -17,4 +17,9 @@ class AppRoutes {
   static const String rejected = '/rejected';
   static const String blocked = '/blocked';
   static const String editProfile = '/edit-profile';
+
+  // Fixed Packages
+  static const String fixedPackageMarketplace = '/fixed-package-marketplace';
+  static const String myAcceptedFixedPackages = '/my-accepted-fixed-packages';
+  static const String fixedPackageDetails = '/fixed-package-details';
 }

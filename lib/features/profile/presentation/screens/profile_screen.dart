@@ -123,6 +123,15 @@ class _ProfileScreenContent extends StatelessWidget {
                       Navigator.pushNamed(context, AppRoutes.myAcceptedLeads);
                     }),
                     const SizedBox(height: 8),
+
+                    _buildSectionTitle('Fixed Packages'),
+                    _buildMenuItem(Icons.local_shipping_outlined, 'Packages Marketplace', subtitle: 'View new fixed packages', onTap: () {
+                      Navigator.pushNamed(context, AppRoutes.fixedPackageMarketplace);
+                    }),
+                    _buildMenuItem(Icons.check_circle_outline, 'My Accepted Packages', subtitle: 'View your ongoing packages', onTap: () {
+                      Navigator.pushNamed(context, AppRoutes.myAcceptedFixedPackages);
+                    }),
+                    const SizedBox(height: 8),
                     
                     _buildSectionTitle('Documents'),
                     _buildMenuItem(Icons.badge_outlined, 'Driving License', subtitle: '${driver['licenseNumber']} (Exp: ${_formatDate(driver['licenseExpiry'])})', subtitleColor: AppColors.grey500, imageUrl: driver['documents']?['license'], onTap: () => _handleItemTap(context, driver, vm, driver['documents']?['license'])),
