@@ -204,7 +204,12 @@ class BookingsViewModel extends ChangeNotifier {
         if (body['success'] == true && body['booking'] != null) {
           final trip = body['booking'];
           
-          final statusStr = trip['bookingStatus'] ?? 'Unknown';
+          String statusStr = trip['bookingStatus'] ?? 'Unknown';
+          if (statusStr == 'Accepted' && trip['tripData'] != null && trip['tripData']['arrivedAt'] != null && trip['tripData']['startedAt'] == null) {
+            trip['bookingStatus'] = 'Arrived';
+            statusStr = 'Arrived';
+          }
+
           if (statusStr == 'Completed' || statusStr == 'Cancelled') {
             _activeRide = null;
             prefs.remove('active_booking_id');

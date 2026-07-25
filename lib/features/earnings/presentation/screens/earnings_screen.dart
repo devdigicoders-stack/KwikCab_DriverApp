@@ -3,21 +3,37 @@ import 'package:provider/provider.dart';
 import 'transaction_details_screen.dart';
 import '../screens/earnings_viewmodel.dart';
 import '../../../../core/constants/app_colors.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-class EarningsScreen extends StatelessWidget {
-  const EarningsScreen({super.key});
+class EarningsScreen extends StatefulWidget {
+  final bool isActive;
+  const EarningsScreen({super.key, this.isActive = false});
+
+  @override
+  State<EarningsScreen> createState() => _EarningsScreenState();
+}
+
+class _EarningsScreenState extends State<EarningsScreen> {
+  late EarningsViewModel _vm;
+
+  @override
+  void initState() {
+    super.initState();
+    _vm = EarningsViewModel();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => EarningsViewModel(),
-      child: const _EarningsBody(),
+    return ChangeNotifierProvider.value(
+      value: _vm,
+      child: _EarningsBody(isActive: widget.isActive),
     );
   }
 }
 
 class _EarningsBody extends StatefulWidget {
-  const _EarningsBody();
+  final bool isActive;
+  const _EarningsBody({this.isActive = false});
 
   @override
   State<_EarningsBody> createState() => _EarningsBodyState();
@@ -30,6 +46,18 @@ class _EarningsBodyState extends State<_EarningsBody> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<EarningsViewModel>().fetchWalletDetails();
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant _EarningsBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.read<EarningsViewModel>().fetchWalletDetails();
+        }
+      });
+    }
   }
 
   @override
@@ -68,15 +96,34 @@ class _EarningsBodyState extends State<_EarningsBody> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => _showWithdrawDialog(context, vm),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.yellow,
-                      foregroundColor: AppColors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Withdraw Money', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => _showWithdrawDialog(context, vm),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.grey900,
+                            foregroundColor: AppColors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: AppColors.grey800)),
+                          ),
+                          child: const Text('Withdraw', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => _showAddMoneyDialog(context, vm),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.yellow,
+                            foregroundColor: AppColors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text('Add Money', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
                   // Performance row
@@ -108,6 +155,93 @@ class _EarningsBodyState extends State<_EarningsBody> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showAddMoneyDialog(BuildContext context, EarningsViewModel vm) {
+    final TextEditingController amountController = TextEditingController();
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.grey900,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 20, right: 20, top: 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text('Add Money to Wallet', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.white), textAlign: TextAlign.center),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: amountController,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: AppColors.white, fontSize: 18),
+                    decoration: InputDecoration(
+                      hintText: 'Enter amount',
+                      hintStyle: const TextStyle(color: AppColors.grey600),
+                      prefixText: '₹ ',
+                      prefixStyle: const TextStyle(color: AppColors.white, fontSize: 18),
+                      filled: true,
+                      fillColor: AppColors.black,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: isSubmitting ? null : () async {
+                      final amountText = amountController.text.trim();
+                      if (amountText.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter an amount')));
+                        return;
+                      }
+                      final amount = double.tryParse(amountText);
+                      if (amount == null || amount <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid amount')));
+                        return;
+                      }
+
+                      setState(() => isSubmitting = true);
+                      final url = await vm.requestAddMoney(amount);
+                      setState(() => isSubmitting = false);
+
+                      if (url != null) {
+                        Navigator.pop(dialogContext);
+                        final uri = Uri.parse(url);
+                        try {
+                          await launchUrl(uri);
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open browser: $e')));
+                        }
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to generate payment link!')));
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.yellow,
+                      foregroundColor: AppColors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: isSubmitting
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: AppColors.black, strokeWidth: 2))
+                        : const Text('Proceed to Pay', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -298,10 +432,21 @@ class _TripTile extends StatelessWidget {
                 margin: const EdgeInsets.only(top: 4),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isCredit ? AppColors.success.withValues(alpha: 0.15) : AppColors.error.withValues(alpha: 0.15),
+                  color: entry.status == 'Pending' 
+                      ? AppColors.yellow.withValues(alpha: 0.15) 
+                      : entry.status == 'Failed' 
+                          ? AppColors.error.withValues(alpha: 0.15)
+                          : isCredit ? AppColors.success.withValues(alpha: 0.15) : AppColors.error.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text(entry.type, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isCredit ? AppColors.success : AppColors.error)),
+                child: Text(entry.status.toUpperCase(), style: TextStyle(
+                  fontSize: 10, fontWeight: FontWeight.w600, 
+                  color: entry.status == 'Pending' 
+                      ? AppColors.yellow 
+                      : entry.status == 'Failed' 
+                          ? AppColors.error
+                          : isCredit ? AppColors.success : AppColors.error
+                )),
               ),
             ],
           ),

@@ -22,13 +22,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const List<Widget> _pages = [
-    RideScreen(),
-    BookingsScreen(),
-    BulkBookingsScreen(),
-    EarningsScreen(),
-    ProfileScreen(),
-  ];
+
 
   @override
   void initState() {
@@ -119,7 +113,16 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Consumer<HomeViewModel>(
         builder: (context, vm, _) => Scaffold(
           backgroundColor: AppColors.black,
-          body: IndexedStack(index: vm.selectedIndex, children: _pages),
+          body: IndexedStack(
+            index: vm.selectedIndex, 
+            children: [
+              const RideScreen(),
+              const BookingsScreen(),
+              const BulkBookingsScreen(),
+              EarningsScreen(isActive: vm.selectedIndex == 3),
+              const ProfileScreen(),
+            ]
+          ),
           bottomNavigationBar: _BottomNav(selectedIndex: vm.selectedIndex, onTap: vm.setIndex),
         ),
       ),

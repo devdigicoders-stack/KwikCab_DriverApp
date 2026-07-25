@@ -112,4 +112,36 @@ class EarningsViewModel extends ChangeNotifier {
       return false;
     }
   }
+
+  Future<String?> requestAddMoney(double amount) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('driver_token') ?? '';
+
+      final response = await http.post(
+        Uri.parse(ApiConstants.addMoneyCreateOrder),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'amount': amount,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('Backend Add Money Success: $data');
+        if (data['success'] == true && data['paymentLinks'] != null) {
+          return data['paymentLinks']['web'];
+        }
+      } else {
+        print('Backend Add Money Error Code: ${response.statusCode}, Body: ${response.body}');
+      }
+      return null;
+    } catch (e) {
+      print('Add Money Exception: $e');
+      return null;
+    }
+  }
 }

@@ -28,6 +28,7 @@ class ApiConstants {
   static const String rateUser = '$baseUrl/api/bookings/:bookingId/rate-user';
   static const String getWallet = '$baseUrl/api/wallet/my-wallet';
   static const String requestWithdrawal = '$baseUrl/api/wallet/withdraw';
+  static const String addMoneyCreateOrder = '$baseUrl/api/wallet/add-money/create-order';
   
   // Support
   static const String createSupportTicket = '$baseUrl/api/support/create';

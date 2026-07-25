@@ -410,7 +410,13 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
           _activeRides.clear();
           
           for (var trip in trips) {
-            final statusStr = trip['bookingStatus'] ?? '';
+            String statusStr = trip['bookingStatus'] ?? '';
+            
+            if (statusStr == 'Accepted' && trip['tripData'] != null && trip['tripData']['arrivedAt'] != null && trip['tripData']['startedAt'] == null) {
+              trip['bookingStatus'] = 'Arrived';
+              statusStr = 'Arrived';
+            }
+
             if (statusStr != 'Completed' && statusStr != 'Cancelled' && statusStr != 'Pending') {
               _activeRides.add(RideRequest.fromJson({'booking': trip}));
             }

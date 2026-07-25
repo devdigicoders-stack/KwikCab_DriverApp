@@ -5,6 +5,12 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Full-screen intent (Uber-style incoming ride) -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <!-- Wake lock to turn on screen when ride comes -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- Vibration for ride alert -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
 
     <application
         android:label="KwikCab Driver"
