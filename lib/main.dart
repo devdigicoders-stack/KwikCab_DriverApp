@@ -105,7 +105,7 @@ Future<void> _showRideNotification({
     enableVibration: true,
     // Loop vibration for urgency
     vibrationPattern: Int64List.fromList([0, 500, 300, 500, 300, 500]),
-    fullScreenIntent: true,       // ← turns on screen like incoming call
+    fullScreenIntent: false,      // Phone lock hone par screen apne aap on nahi hogi
     usesChronometer: true,
     chronometerCountDown: true,
     when: DateTime.now().millisecondsSinceEpoch + 15000, // 15 seconds timer
