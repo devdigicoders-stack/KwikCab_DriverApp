@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../routes/app_routes.dart';
 import '../../core/constants/app_colors.dart';
+import '../../main.dart';
+import 'dart:convert';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -29,6 +31,16 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     final prefs = await SharedPreferences.getInstance();
     final isLoggedIn = prefs.getBool('driver_isLoggedIn') ?? false;
     if (!mounted) return;
+    
+    // Check if launched via notification
+    try {
+      final details = await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+      if (details != null && details.didNotificationLaunchApp && details.notificationResponse != null) {
+        Navigator.pushReplacementNamed(context, isLoggedIn ? AppRoutes.home : AppRoutes.welcome);
+        return;
+      }
+    } catch (_) {}
+
     Navigator.pushReplacementNamed(context, isLoggedIn ? AppRoutes.home : AppRoutes.welcome);
   }
 

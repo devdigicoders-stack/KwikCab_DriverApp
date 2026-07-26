@@ -188,6 +188,17 @@ class _RideBody extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+                          if (vm.activeRide != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '₹${vm.activeRide!.fare.toInt()}',
+                              style: const TextStyle(
+                                color: AppColors.success,
+                                fontSize: 36,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           const Text(
                             'Please collect the cash from the customer before completing the trip.',

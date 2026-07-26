@@ -13,6 +13,8 @@ import '../features/profile/presentation/screens/hdfc_payment_webview.dart';
 import '../features/fixed_packages/presentation/screens/fixed_package_marketplace_screen.dart';
 import '../features/fixed_packages/presentation/screens/my_accepted_fixed_packages_screen.dart';
 import '../features/fixed_packages/presentation/screens/fixed_package_details_screen.dart';
+import '../features/ride/presentation/screens/incoming_ride_screen.dart';
+import '../features/profile/presentation/screens/destination_filter_screen.dart';
 
 class RouteGenerator {
   RouteGenerator._();
@@ -51,6 +53,10 @@ class RouteGenerator {
         return _route(const MyAcceptedFixedPackagesScreen());
       case AppRoutes.fixedPackageDetails:
         return _route(FixedPackageDetailsScreen(package: settings.arguments as Map<String, dynamic>));
+      case AppRoutes.incomingRide:
+        return _route(IncomingRideScreen(payload: args ?? {}));
+      case AppRoutes.destinationFilter:
+        return _route(const DestinationFilterScreen());
       default:
         return _route(const SplashScreen());
     }

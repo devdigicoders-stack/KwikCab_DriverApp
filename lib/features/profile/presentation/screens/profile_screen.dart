@@ -104,6 +104,17 @@ class _ProfileScreenContent extends StatelessWidget {
                     _buildMenuItem(Icons.credit_card_outlined, 'PAN Number', subtitle: driver['panNumber'], imageUrl: driver['documents']?['pan'], onTap: () => _handleItemTap(context, driver, vm, driver['documents']?['pan'])),
                     
                     const SizedBox(height: 8),
+                    _buildSectionTitle('Preferences'),
+                    _buildMenuItem(
+                      Icons.map_outlined, 
+                      'Home-Bound Rides', 
+                      subtitle: 'Set a destination filter (Limit: 4/day)', 
+                      onTap: () {
+                        Navigator.pushNamed(context, AppRoutes.destinationFilter);
+                      }
+                    ),
+
+                    const SizedBox(height: 8),
                     _buildSectionTitle('Account'),
                     _buildMenuItem(Icons.account_balance_wallet_outlined, 'Wallet Balance', subtitle: '₹${driver['walletBalance']}', onTap: () {
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const EarningsScreen()));

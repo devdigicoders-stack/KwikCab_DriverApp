@@ -61,7 +61,7 @@ class RideRequest {
   final double dropLat;
   final double dropLng;
   final double distance;
-  final double fare;
+  double fare;
   final String rideType;
   final int seatsBooked;
   final List<String> selectedSeats;
@@ -171,6 +171,8 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
   bool _isToggling = false;
   Position? _currentPosition;
   Position? _targetPosition;
+  double _travelledDistanceMeters = 0.0;
+  Position? _lastDistancePosition;
   Timer? _animationTimer;
   Timer? _pollingTimer;
   GoogleMapController? _mapController;
@@ -423,6 +425,7 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
           }
           
           if (_activeRides.isNotEmpty) {
+            _stopRingtone(); // Stop ringtone if we have active rides!
             _selectedRideIndex = 0;
             // Determine overall status based on the first ride (simplified)
             final statusStr = _activeRides.first.bookingStatus;
@@ -558,6 +561,22 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
           SocketService.instance.updateLocation(_driverId!, position.latitude, position.longitude, position.heading);
         }
         _sendLocationToBackend(position);
+      }
+
+      // --- NEW: Track Distance ---
+      if (_status == DriverStatus.rideStarted && activeRide != null) {
+        if (_lastDistancePosition != null) {
+          double dist = Geolocator.distanceBetween(
+            _lastDistancePosition!.latitude, _lastDistancePosition!.longitude,
+            position.latitude, position.longitude,
+          );
+          if (dist > 5 && dist < 150) { // Filter out minor GPS drift and huge impossible jumps
+            _travelledDistanceMeters += dist;
+            _lastDistancePosition = position;
+          }
+        } else {
+          _lastDistancePosition = position;
+        }
       }
       
       // Update route dynamically if moving towards pickup or drop
@@ -1196,6 +1215,8 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
 
   void startRide() {
     _status = DriverStatus.rideStarted;
+    _travelledDistanceMeters = 0.0;
+    _lastDistancePosition = _currentPosition;
     _drawRouteForCurrentStatus();
     notifyListeners();
   }
@@ -1348,17 +1369,30 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
       final token = prefs.getString('driver_token') ?? '';
 
       final url = ApiConstants.initiateCompletion.replaceAll(':bookingId', activeRide!.bookingId);
-      print('Calling API: POST $url');
+      final actualDistanceKm = _travelledDistanceMeters / 1000.0;
+      
+      print('Calling API: POST $url with distance: $actualDistanceKm km');
       final response = await http.post(
         Uri.parse(url),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
+        body: jsonEncode({
+          'actualDistanceKm': actualDistanceKm,
+        }),
       );
 
       print('initiateTripCompletion response: ${response.statusCode} - ${response.body}');
       if (response.statusCode == 200) {
+        try {
+          final resData = jsonDecode(response.body);
+          if (resData['finalFare'] != null) {
+            activeRide!.fare = (resData['finalFare'] as num).toDouble();
+          }
+        } catch (e) {
+          print('Error parsing finalFare: $e');
+        }
         _isWaitingForPayment = true;
         notifyListeners();
         return true;
@@ -1475,12 +1509,16 @@ class RideViewModel extends ChangeNotifier with WidgetsBindingObserver {
   void dispose() {
     _disposed = true;
     WidgetsBinding.instance.removeObserver(this);
+    _stopRingtone();
     _stopLocationTracking();
     _stopSocketListening();
     _animationTimer?.cancel();
     _waitingTimer?.cancel();
     _positionStreamSubscription?.cancel();
     _mapController?.dispose();
+    try {
+      _audioPlayer.dispose();
+    } catch (_) {}
     super.dispose();
   }
 

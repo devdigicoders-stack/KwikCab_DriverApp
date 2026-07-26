@@ -25,13 +25,8 @@ const String _generalChannelName = 'KwikCab Notifications';
 const String _actionAccept = 'ACCEPT_RIDE';
 const String _actionReject = 'REJECT_RIDE';
 
-// ─── Background/terminated action handler (top-level, required) ─────────────
-@pragma('vm:entry-point')
-void notificationTapBackground(NotificationResponse notificationResponse) async {
-  final actionId  = notificationResponse.actionId;
-  final payload   = notificationResponse.payload ?? '';
+Future<void> _handleRideAction(String actionId, String payload) async {
   if (payload.isEmpty) return;
-
   try {
     final data      = jsonDecode(payload) as Map<String, dynamic>;
     final bookingId = data['bookingId'] as String? ?? '';
@@ -42,15 +37,22 @@ void notificationTapBackground(NotificationResponse notificationResponse) async 
     final token = prefs.getString('driver_token') ?? '';
     if (token.isEmpty) return;
 
+    final targetId = requestId.isNotEmpty ? requestId : bookingId;
     if (actionId == _actionAccept) {
-      final targetId = requestId.isNotEmpty ? requestId : bookingId;
-      await http.put(
+      final response = await http.put(
         Uri.parse('${ApiConstants.respondToRide}/$targetId/respond'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
         body: jsonEncode({'action': 'Accept'}),
       );
+      if (response.statusCode == 200) {
+        await prefs.setString('active_booking_id', bookingId);
+        List<String> activeIds = prefs.getStringList('active_booking_ids') ?? [];
+        if (!activeIds.contains(bookingId)) {
+          activeIds.add(bookingId);
+          await prefs.setStringList('active_booking_ids', activeIds);
+        }
+      }
     } else if (actionId == _actionReject) {
-      final targetId = requestId.isNotEmpty ? requestId : bookingId;
       await http.put(
         Uri.parse('${ApiConstants.respondToRide}/$targetId/respond'),
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
@@ -59,6 +61,14 @@ void notificationTapBackground(NotificationResponse notificationResponse) async 
     }
   } catch (e) {
     debugPrint('⚠️ [NOTIF-ACTION] Error: $e');
+  }
+}
+
+// ─── Background/terminated action handler (top-level, required) ─────────────
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse notificationResponse) async {
+  if (notificationResponse.actionId != null) {
+    await _handleRideAction(notificationResponse.actionId!, notificationResponse.payload ?? '');
   }
 }
 
@@ -96,6 +106,10 @@ Future<void> _showRideNotification({
     // Loop vibration for urgency
     vibrationPattern: Int64List.fromList([0, 500, 300, 500, 300, 500]),
     fullScreenIntent: true,       // ← turns on screen like incoming call
+    usesChronometer: true,
+    chronometerCountDown: true,
+    when: DateTime.now().millisecondsSinceEpoch + 15000, // 15 seconds timer
+    timeoutAfter: 15000, // Automatically cancel after 15 seconds
     styleInformation: BigTextStyleInformation(
       richBody,
       contentTitle: '📍 $title',
@@ -105,13 +119,13 @@ Future<void> _showRideNotification({
       AndroidNotificationAction(
         _actionAccept,
         '✅ Accept',
-        showsUserInterface: false, // silent accept without opening app
+        showsUserInterface: true,
         cancelNotification: true,
       ),
       AndroidNotificationAction(
         _actionReject,
         '❌ Reject',
-        showsUserInterface: false, // silent reject without opening app
+        showsUserInterface: true,
         cancelNotification: true,
       ),
     ],
@@ -149,7 +163,7 @@ Future<void> _showGeneralNotification({
   );
 }
 
-/// ─── BACKGROUND MESSAGE HANDLER ─────────────────────────────────────────────
+// ─── BACKGROUND MESSAGE HANDLER ─────────────────────────────────────────────
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(
@@ -177,6 +191,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final body      = rawBody.replaceAll(emojiRx, '').trim();
 
   if (type == 'NEW_RIDE_REQUEST') {
+    debugPrint('🛑 FCM BACKGROUND DATA: $data');
     await _showRideNotification(data: data, title: title, body: body);
   } else {
     final imageUrl = data['mediaUrl'] ?? data['image'] ?? '';
@@ -231,10 +246,22 @@ void main() async {
   await flutterLocalNotificationsPlugin.initialize(
     const InitializationSettings(android: initAndroid),
     onDidReceiveNotificationResponse: (NotificationResponse res) async {
-      // Foreground tap on notification body → open app
-      if (res.actionId == null && res.payload != null) {
-        navigatorKey.currentState?.pushNamed(AppRoutes.home);
+      if (res.actionId != null) {
+        await _handleRideAction(res.actionId!, res.payload ?? '');
       }
+      
+      // Route based on payload
+      if (res.payload != null && res.payload!.isNotEmpty) {
+        try {
+          final payload = jsonDecode(res.payload!);
+          if (payload['type'] == 'FIXED_BOOKING') {
+            navigatorKey.currentState?.pushNamedAndRemoveUntil(AppRoutes.fixedPackageMarketplace, (route) => false);
+            return;
+          }
+        } catch (_) {}
+      }
+      
+      navigatorKey.currentState?.pushNamedAndRemoveUntil(AppRoutes.home, (route) => false);
     },
     onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
   );
@@ -272,6 +299,7 @@ void main() async {
     final body     = rawBody.replaceAll(emojiRx, '').trim();
 
     if (type == 'NEW_RIDE_REQUEST') {
+      debugPrint('🛑 FCM RAW DATA: $data');
       await _showRideNotification(data: data, title: title, body: body);
     } else {
       final imageUrl = data['mediaUrl'] ?? data['image'] ?? '';
@@ -295,6 +323,12 @@ void main() async {
         } catch (_) {}
       }
       await _showGeneralNotification(title: title, body: body, id: message.hashCode);
+    }
+  });
+
+  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    if (message.data['type'] == 'FIXED_BOOKING') {
+      navigatorKey.currentState?.pushNamedAndRemoveUntil(AppRoutes.fixedPackageMarketplace, (route) => false);
     }
   });
 

@@ -6,12 +6,14 @@ class ApiConstants {
   static const String driverLogin = '$baseUrl/api/drivers/login';
   static const String driverRegister = '$baseUrl/api/drivers/register';
   static const String driverResubmit = '$baseUrl/api/drivers/resubmit';
-  static const String createDriverLead = '$baseUrl/api/driver-leads';
+  static const String createDriverLead = '$baseUrl/api/driver-leads/add';
   static const String driverProfile = '$baseUrl/api/drivers/profile';
   static const String profileUpdate = '$baseUrl/api/drivers/profile-update';
   static const String carCategories = '$baseUrl/api/car-categories/active';
   static const String toggleOnline = '$baseUrl/api/drivers/toggle-online';
   static const String updateLocation = '$baseUrl/api/drivers/update-location';
+  static const String setDestination = '$baseUrl/api/drivers/set-destination';
+  static const String clearDestination = '$baseUrl/api/drivers/clear-destination';
   static const String getPendingRequests = '$baseUrl/api/trips/requests/pending';
   static const String respondToRide = '$baseUrl/api/trips/requests';
   static const String executeArrived = '$baseUrl/api/trips/execute/:bookingId/arrived';
